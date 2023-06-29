@@ -39,16 +39,19 @@ class os_t:
         self.current_task = None
         self.next_sched_task = 0
         self.idle_task = None
+        self.terminal.console_print("teste")
         self.idle_task = self.load_task("idle.bin")
+        self.terminal.console_print("teste 2")
 
         if self.idle_task is None:
             self.panic("could not load idle.bin task")
-
-        self.sched(self.idle_task)
+        else:
+            self.sched(self.idle_task)
 
         self.terminal.console_print("this is the console, type the commands here\n")
 
     def load_task(self, bin_name):
+        self.terminal.console_print("teste" + str(bin_name))
         if not os.path.isfile(bin_name):
             self.printk("file " + bin_name + " does not exists")
             return None
@@ -60,7 +63,10 @@ class os_t:
         task.bin_name = bin_name
         task.bin_size = os.path.getsize(bin_name) / 2  # 2 bytes = 1 word
 
-        task.paddr_offset, task.paddr_max = self.allocate_contiguos_physical_memory_to_task(task.bin_size, task)
+        (
+            task.paddr_offset,
+            task.paddr_max,
+        ) = self.allocate_contiguos_physical_memory_to_task(task.bin_size, task)
 
         if task.paddr_offset == -1:
             return None
@@ -70,9 +76,19 @@ class os_t:
         task.stack = 0
         task.state = PYOS_TASK_STATE_READY
 
-        self.printk("allocated physical addresses " + str(task.paddr_offset) + " to " + str(
-            task.paddr_max) + " for task " + task.bin_name + " (" + str(
-            self.get_task_amount_of_memory(task)) + " words) (binary has " + str(task.bin_size) + " words)")
+        self.printk(
+            "allocated physical addresses "
+            + str(task.paddr_offset)
+            + " to "
+            + str(task.paddr_max)
+            + " for task "
+            + task.bin_name
+            + " ("
+            + str(self.get_task_amount_of_memory(task))
+            + " words) (binary has "
+            + str(task.bin_size)
+            + " words)"
+        )
 
         self.read_binary_to_memory(task.paddr_offset, task.paddr_max, bin_name)
 
@@ -101,22 +117,37 @@ class os_t:
                     word = lower_byte | (byte << 8)
                     if paddr > paddr_max:
                         self.panic(
-                            "something really bad happenned when loading " + bin_name + " (paddr > task.paddr_max)")
+                            "something really bad happenned when loading "
+                            + bin_name
+                            + " (paddr > task.paddr_max)"
+                        )
                     self.memory.write(paddr, word)
                     paddr = paddr + 1
                     i = i + 1
                 bpos = bpos ^ 1
 
         if i != bin_size:
-            self.panic("something really bad happenned when loading " + bin_name + " (i != task.bin_size)")
+            self.panic(
+                "something really bad happenned when loading "
+                + bin_name
+                + " (i != task.bin_size)"
+            )
 
     def sched(self, task):
         if self.current_task is not None:
             self.panic(
-                "current_task must be None when scheduling a new one (current_task=" + self.current_task.bin_name + ")")
+                "current_task must be None when scheduling a new one (current_task="
+                + self.current_task.bin_name
+                + ")"
+            )
         if task.state != PYOS_TASK_STATE_READY:
-            self.panic("task " + task.bin_name + " must be in READY state for being scheduled (state = " + str(
-                task.state) + ")")
+            self.panic(
+                "task "
+                + task.bin_name
+                + " must be in READY state for being scheduled (state = "
+                + str(task.state)
+                + ")"
+            )
 
         # TODO
         # Escrever no processador os registradores de proposito geral salvos na task struct
@@ -130,7 +161,6 @@ class os_t:
         # Atualizar estado do processo
         task.state = PYOS_TASK_STATE_EXECUTING
 
-        # Escrever no processador os registradores que configuram a memória virtual, salvos na task struct
         self.cpu.paddr_offset = task.paddr_offset
         self.cpu.paddr_max = task.paddr_max
 
@@ -147,18 +177,17 @@ class os_t:
     def allocate_contiguos_physical_memory_to_task(self, words, task):
         # TODO
         # Localizar um bloco de memoria livre para armazenar o processo
+
         free_space = (self.addr_free_init + words) - 1 < self.addr_free_max
 
         # Retornar tupla <primeiro endereco livre>, <ultimo endereco livre>
         if not free_space:
             if task.bin_name == "idle.bin":
-                self.addr_free_init += words - 1
-                # Retorna (primeiro endereço livre = 0, último endereço livre = words - 1)
-                return 0, words - 1
+                self.addr_free_init += words
+                return 0, words
             else:
                 self.addr_free_init += words
-                # Retorna (primeiro endereço livre = Page Address + 1, último endereço livre = words - 1)
-                return self.addr_free_init + 1, words - 1
+                return self.addr_free_init + 1, words
         else:
             # if we get here, there is no free space to put the task
             self.printk("could not allocate memory to task " + task.bin_name)
@@ -177,15 +206,21 @@ class os_t:
     def interrupt_keyboard(self):
         key = self.terminal.get_key_buffer()
 
-        if ((key >= ord('a')) and (key <= ord('z'))) or ((key >= ord('A')) and (key <= ord('Z'))) or (
-                (key >= ord('0')) and (key <= ord('9'))) or (key == ord(' ')) or (key == ord('-')) or (
-                key == ord('_')) or (key == ord('.')):
+        if (
+            ((key >= ord("a")) and (key <= ord("z")))
+            or ((key >= ord("A")) and (key <= ord("Z")))
+            or ((key >= ord("0")) and (key <= ord("9")))
+            or (key == ord(" "))
+            or (key == ord("-"))
+            or (key == ord("_"))
+            or (key == ord("."))
+        ):
             self.console_str = self.console_str + chr(key)
             self.terminal.console_print("\r" + self.console_str)
         elif key == curses.KEY_BACKSPACE:
             self.console_str = self.console_str[:-1]
             self.terminal.console_print("\r" + self.console_str)
-        elif (key == curses.KEY_ENTER) or (key == ord('\n')):
+        elif (key == curses.KEY_ENTER) or (key == ord("\n")):
             self.interpret_cmd(self.console_str)
             self.console_str = ""
 
@@ -195,18 +230,22 @@ class os_t:
         elif cmd == "tasks":
             self.task_table_print()
         elif cmd[:3] == "run":
-            if (self.the_task is not None):
-                self.terminal.console_print("error: binary " + self.the_task.bin_name + " is already running\n")
+            if self.the_task is not None:
+                self.terminal.console_print(
+                    "error: binary " + self.the_task.bin_name + " is already running\n"
+                )
             else:
                 bin_name = cmd[4:]
                 self.terminal.console_print("\rrun binary " + bin_name + "\n")
                 task = self.load_task(bin_name)
                 if task is not None:
-                    self.the_task = task;
+                    self.the_task = task
                     self.un_sched(self.idle_task)
                     self.sched(self.the_task)
                 else:
-                    self.terminal.console_print("error: binary " + bin_name + " not found\n")
+                    self.terminal.console_print(
+                        "error: binary " + bin_name + " not found\n"
+                    )
         else:
             self.terminal.console_print("\rinvalid cmd " + cmd + "\n")
 
@@ -223,11 +262,21 @@ class os_t:
 
     def un_sched(self, task):
         if task.state != PYOS_TASK_STATE_EXECUTING:
-            self.panic("task " + task.bin_name + " must be in EXECUTING state for being scheduled (state = " + str(
-                task.state) + ")")
+            self.panic(
+                "task "
+                + task.bin_name
+                + " must be in EXECUTING state for being scheduled (state = "
+                + str(task.state)
+                + ")"
+            )
         if task is not self.current_task:
             self.panic(
-                "task " + task.bin_name + " must be the current_task for being scheduled (current_task = " + self.current_task.bin_name + ")")
+                "task "
+                + task.bin_name
+                + " must be the current_task for being scheduled (current_task = "
+                + self.current_task.bin_name
+                + ")"
+            )
 
         # TODO
         # Salvar na task struct
